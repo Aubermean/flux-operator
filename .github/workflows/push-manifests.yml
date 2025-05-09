@@ -24,7 +24,12 @@ jobs:
       - name: Prepare
         id: prep
         run: |
-          RELEASE=$(gh release view --json tagName -q '.tagName')
+          set -euo pipefail
+          if gh release view --json tagName -q '.tagName' >/dev/null 2>&1; then
+            RELEASE=$(gh release view --json tagName -q '.tagName')
+          else
+            RELEASE="v0.0.0"
+          fi
           VERSION="${RELEASE}-$(date +%s)"
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
         env:
