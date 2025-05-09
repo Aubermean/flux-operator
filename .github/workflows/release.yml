@@ -29,46 +29,58 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - name: Unshallow
         run: git fetch --prune --unshallow
+
       - name: Setup Kustomize
         uses: fluxcd/pkg/actions/kustomize@main
+
       - name: Setup Flux
         uses: fluxcd/flux2/action@8d5f40dca5aa5d3c0fc3414457dda15a0ac92fa4 # v2.5.1
+
       - name: Setup Syft
         uses: anchore/sbom-action/download-syft@9f7302141466aa6482940f15371237e9d9f4c34a # v0.19.0
+
       - name: Prepare
         id: prep
         run: |
           set -euo pipefail
+          REPO_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_OWNER_LOWER=$REPO_OWNER_LOWER" >> $GITHUB_ENV
           if gh release view --json tagName -q '.tagName' >/dev/null 2>&1; then
             RELEASE=$(gh release view --json tagName -q '.tagName')
           else
             RELEASE="v0.0.0"
           fi
           VERSION="${RELEASE}-$(date +%s)"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
       - name: Setup Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate images meta
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}
+            ghcr.io/${{ env.REPO_OWNER_LOWER }}/${{ env.CONTROLLER }}
           tags: |
             type=raw,value=${{ steps.prep.outputs.VERSION }}
+
       - name: Publish images
         id: build-push
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
@@ -82,12 +94,15 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
       - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
       - name: Sign images
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
-          cosign sign --yes ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}@${{ steps.build-push.outputs.digest }}
+          cosign sign --yes ghcr.io/${REPO_OWNER_LOWER}/${{ env.CONTROLLER }}@${{ steps.build-push.outputs.digest }}
+
       - name: Push and sign manifests
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -98,16 +113,17 @@ jobs:
           make build-manifests
 
           img_digest=$(flux push artifact \
-          oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
-          --path=disto \
-          --source=${{ github.repositoryUrl }} \
-          --revision="${{ github.ref_name }}@sha1:${{ github.sha }}" \
-          --annotations='org.opencontainers.image.description=Flux Operator' \
-          --output=json | jq -r '.digest')
+            oci://ghcr.io/${REPO_OWNER_LOWER}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
+            --path=disto \
+            --source=${{ github.repositoryUrl }} \
+            --revision="${{ github.ref_name }}@sha1:${{ github.sha }}" \
+            --annotations='org.opencontainers.image.description=Flux Operator' \
+            --output=json | jq -r '.digest')
 
-          cosign sign --yes ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests@${img_digest}
+          cosign sign --yes ghcr.io/${REPO_OWNER_LOWER}/${{ env.CONTROLLER }}-manifests@${img_digest}
 
-          flux tag artifact oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
+          flux tag artifact oci://ghcr.io/${REPO_OWNER_LOWER}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
+
       - name: Build release artifacts
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -115,14 +131,17 @@ jobs:
           mkdir -p bin/release
           kustomize build config/default > bin/release/install.yaml
           kustomize build config/crd > bin/release/crds.yaml
+
       - name: Generate OpenAPI JSON schemas from CRDs
         uses: fluxcd/pkg/actions/crdjsonschema@7e9c75bbb6a47b08c194edefa11d1c436e5bdd9e # main
         with:
           crd: bin/release/crds.yaml
           output: schemas
+
       - name: Archive the OpenAPI JSON schemas
         run: |
           tar -czvf bin/release/crd-schemas.tar.gz -C schemas .
+
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/v')
         id: run-goreleaser
@@ -132,10 +151,11 @@ jobs:
           args: release --skip=validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate SLSA metadata
         id: slsa
         run: |
-          image_url=ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}:${{ steps.prep.outputs.version }}
+          image_url=ghcr.io/${REPO_OWNER_LOWER}/${{ env.CONTROLLER }}:${{ steps.prep.outputs.VERSION }}
           echo "image_url=$image_url" >> $GITHUB_OUTPUT
 
           image_digest=${{ steps.build-push.outputs.digest }}
