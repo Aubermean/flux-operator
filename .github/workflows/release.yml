@@ -23,9 +23,9 @@ jobs:
       image_digest: ${{ steps.slsa.outputs.image_digest }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write # for creating the GitHub release.
-      id-token: write # for creating OIDC tokens for signing.
-      packages: write # for pushing and signing container images.
+      contents: write
+      id-token: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -34,7 +34,7 @@ jobs:
       - name: Setup Kustomize
         uses: fluxcd/pkg/actions/kustomize@main
       - name: Setup Flux
-        uses: fluxcd/flux2/action@8d5f40dca5aa5d3c0fc3414457dda15a0ac92fa4 #v2.5.1
+        uses: fluxcd/flux2/action@8d5f40dca5aa5d3c0fc3414457dda15a0ac92fa4 # v2.5.1
       - name: Setup Syft
         uses: anchore/sbom-action/download-syft@9f7302141466aa6482940f15371237e9d9f4c34a # v0.19.0
       - name: Prepare
@@ -62,7 +62,7 @@ jobs:
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
           images: |
-            ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}
           tags: |
             type=raw,value=${{ steps.prep.outputs.VERSION }}
       - name: Publish images
@@ -83,27 +83,27 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
-          cosign sign --yes ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}@${{ steps.build-push.outputs.digest }}
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}@${{ steps.build-push.outputs.digest }}
       - name: Push and sign manifests
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
           set -euo pipefail
-          
+
           make build-manifests
-          
+
           img_digest=$(flux push artifact \
-          oci://ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
+          oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
           --path=disto \
           --source=${{ github.repositoryUrl }} \
           --revision="${{ github.ref_name }}@sha1:${{ github.sha }}" \
           --annotations='org.opencontainers.image.description=Flux Operator' \
           --output=json | jq -r '.digest')
-          
-          cosign sign --yes ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests@${img_digest}
-          
-          flux tag artifact oci://ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
+
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests@${img_digest}
+
+          flux tag artifact oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
       - name: Build release artifacts
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -130,19 +130,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate SLSA metadata
         id: slsa
-        run: |          
-          image_url=ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}:${{ steps.prep.outputs.version }}
+        run: |
+          image_url=ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}:${{ steps.prep.outputs.version }}
           echo "image_url=$image_url" >> $GITHUB_OUTPUT
-          
+
           image_digest=${{ steps.build-push.outputs.digest }}
           echo "image_digest=$image_digest" >> $GITHUB_OUTPUT
 
   ghcr-provenance:
     needs: [release]
     permissions:
-      actions: read # for detecting the Github Actions environment.
-      id-token: write # for creating OIDC tokens for signing.
-      packages: write # for uploading attestations.
+      actions: read
+      id-token: write
+      packages: write
     if: startsWith(github.ref, 'refs/tags/v')
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
