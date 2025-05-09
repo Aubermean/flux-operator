@@ -45,13 +45,13 @@ jobs:
           make build-manifests
           
           img_digest=$(flux push artifact \
-          oci://ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
+          oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} \
           --path=disto \
           --source=${{ github.repositoryUrl }} \
           --revision="${{ github.ref_name }}@sha1:${{ github.sha }}" \
           --annotations='org.opencontainers.image.description=Flux Operator' \
           --output=json | jq -r '.digest')
           
-          cosign sign --yes ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests@${img_digest}
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests@${img_digest}
           
-          flux tag artifact oci://ghcr.io/controlplaneio-fluxcd/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
+          flux tag artifact oci://ghcr.io/${{ github.repository_owner }}/${{ env.CONTROLLER }}-manifests:${{ steps.prep.outputs.VERSION }} --tag=latest
