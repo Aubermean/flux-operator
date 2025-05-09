@@ -40,12 +40,16 @@ jobs:
       - name: Prepare
         id: prep
         run: |
-          VERSION="${{ github.event.inputs.tag }}-${GITHUB_SHA::8}"
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF/refs\/tags\//}
+          set -euo pipefail
+          if gh release view --json tagName -q '.tagName' >/dev/null 2>&1; then
+            RELEASE=$(gh release view --json tagName -q '.tagName')
+          else
+            RELEASE="v0.0.0"
           fi
-          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          VERSION="${RELEASE}-$(date +%s)"
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
       - name: Setup Docker Buildx
