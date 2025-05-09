@@ -24,14 +24,12 @@ jobs:
       - name: Prepare
         id: prep
         run: |
-          set -euo pipefail
-          if gh release view --json tagName -q '.tagName' >/dev/null 2>&1; then
-            RELEASE=$(gh release view --json tagName -q '.tagName')
-          else
-            RELEASE="v0.0.0"
-          fi
-          VERSION="${RELEASE}-$(date +%s)"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          REPO_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          CONTROLLER="${{ github.event.repository.name }}"
+          VERSION="v0.0.0-$(date +%s)"
+          echo "REPO_OWNER_LOWER=$REPO_OWNER_LOWER" >> $GITHUB_ENV
+          echo "CONTROLLER=$CONTROLLER" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Login to GitHub Container Registry
